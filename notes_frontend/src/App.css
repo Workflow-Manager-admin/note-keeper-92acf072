@@ -228,6 +228,10 @@
   color: var(--text-primary);
 }
 
+.btn-accent, .btn-primary, .btn-minimal {
+  outline: none;
+  transition: background 0.17s, color 0.16s, opacity 0.14s;
+}
 .btn-accent {
   background: var(--accent-bg);
   color: #fff;
@@ -239,11 +243,18 @@
   cursor: pointer;
   margin-left: 2px;
   box-shadow: 0 1px 4px rgba(53, 94, 243, 0.06);
-  transition: background 0.2s;
 }
-.btn-accent:hover {
+.btn-accent:hover,
+.btn-accent:focus {
   background: #e17c14;
   opacity: 0.95;
+}
+.btn-accent[disabled], .btn-primary[disabled], .btn-minimal[disabled] {
+  cursor: not-allowed !important;
+  opacity: 0.5;
+  background: #e6e7ee !important;
+  color: #aaa !important;
+  pointer-events: none;
 }
 .btn-primary {
   background: var(--button-bg);
@@ -255,9 +266,9 @@
   padding: 8px 22px;
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.10);
-  transition: background 0.17s;
 }
-.btn-primary:hover {
+.btn-primary:hover,
+.btn-primary:focus {
   background: #246ceb;
 }
 .btn-minimal {
@@ -268,10 +279,9 @@
   padding: 5px 9px;
   font-size: 1rem;
   cursor: pointer;
-  transition: color 0.18s, background 0.16s;
 }
-.btn-minimal:hover,
-.inline-link:hover {
+.btn-minimal:hover, .btn-minimal:focus,
+.inline-link:hover, .inline-link:focus {
   background: var(--border-color);
   color: var(--primary);
 }
@@ -289,21 +299,77 @@
   margin: 0 0.15em;
 }
 
-.error-banner {
+/* Inline spinner animation for busy states */
+.spinner {
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  vertical-align: middle;
+  margin-right: 7px;
+  border: 3px solid rgba(136,153,238, 0.18);
+  border-top: 3px solid var(--primary);
+  border-radius: 50%;
+  animation: spinner-rotate 0.65s linear infinite;
+}
+@keyframes spinner-rotate { 100% { transform: rotate(360deg); } }
+
+/* Feedback (success/info) banner */
+.feedback-banner, .error-banner {
   position: fixed;
   left: 50%;
   top: 20px;
   transform: translateX(-50%);
-  background: var(--error-bg);
-  color: var(--error-text);
   font-weight: 600;
-  padding: 13px 32px;
-  border: 1px solid #fbb;
   border-radius: 11px;
-  z-index: 10;
-  box-shadow: 0 1px 8px rgba(255,11,11,0.10);
   min-width: 220px;
   max-width: 92vw;
+  z-index: 20;
+  box-shadow: 0 1px 8px rgba(90,130,255,0.10);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.feedback-banner {
+  background: #f6fded;
+  color: #359B18;
+  border: 1px solid #b4de9b;
+  padding: 13px 32px;
+}
+
+.error-banner {
+  background: var(--error-bg);
+  color: var(--error-text);
+  border: 1px solid #fbb;
+  padding: 13px 32px;
+  box-shadow: 0 1px 8px rgba(255,11,11,0.10);
+}
+
+.close-banner-btn {
+  margin-left: 16px;
+  margin-right: -6px;
+  background: none;
+  color: inherit;
+  border: none;
+  font-size: 1.33em;
+  cursor: pointer;
+  font-weight: 400;
+  line-height: 1;
+  opacity: 0.64;
+  transition: opacity 0.14s;
+}
+.close-banner-btn:hover, .close-banner-btn:focus { opacity: 0.85; }
+
+/* Prevent unwanted click during background loading for overlays */
+.global-overlay-spinner {
+  pointer-events: none;
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(175,192,220,.05);
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .theme-toggle {

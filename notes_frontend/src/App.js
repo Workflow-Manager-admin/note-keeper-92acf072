@@ -19,8 +19,12 @@ function App() {
   // Notes app state
   const [notes, setNotes] = useState([]);
   const [selectedNoteId, setSelectedNoteId] = useState(null);
+
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);        // For create/edit actions
+  const [deletingId, setDeletingId] = useState(null);         // Note id currently being deleted
   const [error, setError] = useState(null);
+  const [banner, setBanner] = useState(null);                 // For general, user-friendly success messages
 
   // For note creation/editing forms
   const [isCreating, setIsCreating] = useState(false);
@@ -32,14 +36,17 @@ function App() {
 
   // PUBLIC_INTERFACE
   const fetchNotes = async () => {
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`${API_BASE}/notes`);
       if (!res.ok) throw new Error('Failed to fetch notes');
       const data = await res.json();
       setNotes(Array.isArray(data) ? data : []);
+      // No error, clear banner
     } catch (err) {
       setError(err.message || 'API Error');
+      setBanner(null);
     } finally {
       setLoading(false);
     }
@@ -47,7 +54,8 @@ function App() {
 
   // PUBLIC_INTERFACE
   const createNote = async (noteData) => {
-    setError(null);
+    setError(null); setBanner(null);
+    setSubmitting(true);
     try {
       const res = await fetch(`${API_BASE}/notes`, {
         method: 'POST',
@@ -58,15 +66,20 @@ function App() {
       const newNote = await res.json();
       setNotes(curr => [...curr, newNote]);
       setSelectedNoteId(newNote.id);
+      setBanner('Note created!');
       return newNote;
     } catch (err) {
       setError(err.message || 'API Error');
+      setBanner(null);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   // PUBLIC_INTERFACE
   const updateNote = async (noteId, noteData) => {
-    setError(null);
+    setError(null); setBanner(null);
+    setSubmitting(true);
     try {
       const res = await fetch(`${API_BASE}/notes/${noteId}`, {
         method: 'PUT',
@@ -76,23 +89,32 @@ function App() {
       if (!res.ok) throw new Error('Failed to update note');
       const updatedNote = await res.json();
       setNotes(curr => curr.map(n => n.id === noteId ? updatedNote : n));
+      setBanner('Note updated!');
       return updatedNote;
     } catch (err) {
       setError(err.message || 'API Error');
+      setBanner(null);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   // PUBLIC_INTERFACE
   const deleteNote = async (noteId) => {
-    setError(null);
+    setError(null); setBanner(null);
+    setDeletingId(noteId);
     try {
       const res = await fetch(`${API_BASE}/notes/${noteId}`, { method: 'DELETE' });
       if (!res.ok && res.status !== 204) throw new Error('Failed to delete note');
       setNotes(curr => curr.filter(n => n.id !== noteId));
       if (selectedNoteId === noteId) setSelectedNoteId(null);
       if (editModeId === noteId) setEditModeId(null);
+      setBanner('Note deleted.');
     } catch (err) {
       setError(err.message || 'API Error');
+      setBanner(null);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -121,12 +143,16 @@ function App() {
   // Submit form for create or update
   const handleFormSubmit = async (e) => {
     e.preventDefault();
-    if ((isCreating && (!formTitle.trim() || !formContent.trim())) ||
-        (editModeId && (!formTitle.trim() || !formContent.trim()))) {
+    if (
+      (isCreating && (!formTitle.trim() || !formContent.trim())) ||
+      (editModeId && (!formTitle.trim() || !formContent.trim()))
+    ) {
       setError('Title and content required');
+      setBanner(null);
       return;
     }
     setError(null);
+    setBanner(null);
     if (isCreating) {
       await createNote({ title: formTitle, content: formContent });
       setIsCreating(false);
@@ -158,22 +184,33 @@ function App() {
     <aside className="sidebar">
       <div className="sidebar-header">
         <span className="app-title">📝 Notes</span>
-        <button className="btn-accent" onClick={startCreate}>+ New</button>
+        <button
+          className="btn-accent"
+          onClick={startCreate}
+          disabled={loading || submitting || deletingId !== null}
+          aria-disabled={loading || submitting || deletingId !== null}
+        >
+          + New
+        </button>
       </div>
       <nav className="note-list">
         {loading ? (
-          <div style={{ textAlign: "center", marginTop: "2rem" }}>Loading...</div>
-        ) : (notes.length === 0 ? (
+          <div style={{ textAlign: "center", marginTop: "2rem", opacity: 0.89 }}>
+            <span className="spinner" /> Loading...
+          </div>
+        ) : notes.length === 0 ? (
           <div className="no-notes">No notes yet.</div>
         ) : (
           notes
-            .slice() // Defensive: avoid mutation
+            .slice()
             .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
             .map(note => (
               <div
                 key={note.id}
                 className={`note-list-item${note.id === selectedNoteId ? ' selected' : ''}`}
                 onClick={() => handleSelectNote(note.id)}
+                aria-current={note.id === selectedNoteId}
+                tabIndex={0}
               >
                 <div className="note-title">{note.title || <em>(Untitled)</em>}</div>
                 <div className="note-meta">
@@ -183,25 +220,40 @@ function App() {
                   <button
                     className="btn-minimal"
                     title="Edit"
-                    onClick={e => { e.stopPropagation(); startEdit(note); }}>
+                    onClick={e => { e.stopPropagation(); startEdit(note); }}
+                    disabled={submitting || deletingId !== null}
+                  >
                     ✏️
                   </button>
                   <button
                     className="btn-minimal"
-                    title="Delete"
-                    onClick={e => { e.stopPropagation(); deleteNote(note.id); }}>
-                    🗑️
+                    title={deletingId === note.id ? "Deleting..." : "Delete"}
+                    aria-busy={deletingId === note.id}
+                    disabled={deletingId === note.id || submitting}
+                    onClick={e => { e.stopPropagation(); deleteNote(note.id); }}
+                  >
+                    {deletingId === note.id ? <span className="spinner" /> : "🗑️"}
                   </button>
                 </div>
               </div>
             ))
-        ))}
+        )}
       </nav>
     </aside>
   );
 
   // Main content: Note details and edit/create forms
   const MainPanel = () => {
+    // Show loading overlay if global loading and not in sidebar
+    if (loading) {
+      return (
+        <section className="main-panel" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 280 }}>
+          <div style={{ textAlign: "center", fontSize: "1.1rem", opacity: 0.91 }}>
+            <span className="spinner" /> Loading notes...
+          </div>
+        </section>
+      );
+    }
     // Create/edit form takes priority
     if (isCreating || editModeId) {
       return (
@@ -216,6 +268,7 @@ function App() {
               value={formTitle}
               onChange={e => setFormTitle(e.target.value)}
               autoFocus
+              disabled={submitting}
             />
             <textarea
               className="input-content"
@@ -223,12 +276,26 @@ function App() {
               rows={10}
               value={formContent}
               onChange={e => setFormContent(e.target.value)}
+              disabled={submitting}
             />
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-              <button className="btn-primary" type="submit">
-                {isCreating ? "Add Note" : "Save"}
+              <button
+                className="btn-primary"
+                type="submit"
+                disabled={submitting || !formTitle.trim() || !formContent.trim()}
+                aria-busy={submitting}
+              >
+                {submitting
+                  ? <><span className="spinner" /> {isCreating ? "Adding..." : "Saving..."}</>
+                  : (isCreating ? "Add Note" : "Save")
+                }
               </button>
-              <button className="btn-minimal" type="button" onClick={cancelForm}>Cancel</button>
+              <button
+                className="btn-minimal"
+                type="button"
+                onClick={cancelForm}
+                disabled={submitting}
+              >Cancel</button>
             </div>
           </form>
         </section>
@@ -248,15 +315,21 @@ function App() {
             <span>Updated: {new Date(note.updated_at).toLocaleString()}</span>
           </div>
           <div style={{ marginTop: 24 }}>
-            <button className="btn-accent" onClick={() => startEdit(note)}>
+            <button
+              className="btn-accent"
+              onClick={() => startEdit(note)}
+              disabled={submitting || deletingId !== null}
+            >
               Edit
             </button>
             <button
               className="btn-minimal"
               style={{ marginLeft: 10 }}
               onClick={() => deleteNote(note.id)}
+              disabled={deletingId === note.id || submitting}
+              aria-busy={deletingId === note.id}
             >
-              Delete
+              {deletingId === note.id ? <span className="spinner" /> : "Delete"}
             </button>
           </div>
         </section>
@@ -272,10 +345,20 @@ function App() {
     );
   };
 
-  // Error banner (top overlay)
+  // Feedback banners (top overlay)
+  const FeedbackBanner = () =>
+    banner ? (
+      <div className="feedback-banner" tabIndex={0} aria-live="polite">
+        {banner}
+        <button className="close-banner-btn" aria-label="Dismiss" onClick={() => setBanner(null)}>×</button>
+      </div>
+    ) : null;
   const ErrorBanner = () =>
     error ? (
-      <div className="error-banner">{error}</div>
+      <div className="error-banner" tabIndex={0} aria-live="polite">
+        {error}
+        <button className="close-banner-btn" aria-label="Dismiss" onClick={() => setError(null)}>×</button>
+      </div>
     ) : null;
 
   // Theme toggle button (fixed)
@@ -292,9 +375,16 @@ function App() {
   return (
     <div className="App app-grid">
       <ThemeToggle />
-      <ErrorBanner />
+      {/* Success/message banner takes precedence. If both, show both stacked. */}
+      {banner && <FeedbackBanner />}
+      {error && <ErrorBanner />}
       <NotesSidebar />
       <MainPanel />
+      {(loading || submitting || deletingId !== null) && (
+        <div className="global-overlay-spinner" aria-busy="true">
+          <span className="spinner" />
+        </div>
+      )}
     </div>
   );
 }
